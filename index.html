@@ -1,237 +1,185 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini Slither.io</title>
-    <!-- PyScript CSS -->
-    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css">
-    <style>
-        body {
-            text-align: center;
-            background-color: #121212;
-            color: white;
-            font-family: Arial, sans-serif;
-            margin: 0;
-        }
-        canvas {
-            border: 2px solid #ffffff;
-            margin-top: 20px;
-        }
-        #score {
-            margin-top: 10px;
-            font-size: 24px;
-        }
-        #controls {
-            display: flex;
-            justify-content: center;
-            margin-top: 20px;
-            gap: 10px;
-        }
-        button {
-            width: 50px;
-            height: 50px;
-            font-size: 20px;
-        }
-    </style>
-</head>
-<body>
-    <h1>Mini Slither.io</h1>
-    <canvas id="gameCanvas" width="800" height="600" tabindex="0"></canvas>
-    <div id="score">Score: 0</div>
-    <div id="controls">
-        <button id="up">↑</button>
-        <button id="left">←</button>
-        <button id="right">→</button>
-        <button id="down">↓</button>
-    </div>
-    <!-- PyScript JS -->
-    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
-    <py-script>
-        import asyncio
-        from js import document, window
-        from pyodide.ffi import create_proxy
-        import random
+import asyncio
+from js import document, window
+from pyodide.ffi import create_proxy
+import random
 
-        # Get references to HTML elements
-        canvas = document.getElementById("gameCanvas")
-        ctx = canvas.getContext("2d")
-        score_element = document.getElementById("score")
+# Get references to HTML elements
+canvas = document.getElementById("gameCanvas")
+ctx = canvas.getContext("2d")
+score_element = document.getElementById("score")
 
-        # Game configuration
-        CELL_SIZE = 20
-        SCREEN_WIDTH = canvas.width
-        SCREEN_HEIGHT = canvas.height
-        GRID_WIDTH = SCREEN_WIDTH // CELL_SIZE
-        GRID_HEIGHT = SCREEN_HEIGHT // CELL_SIZE
+# Game configuration
+CELL_SIZE = 20
+SCREEN_WIDTH = canvas.width
+SCREEN_HEIGHT = canvas.height
+GRID_WIDTH = SCREEN_WIDTH // CELL_SIZE
+GRID_HEIGHT = SCREEN_HEIGHT // CELL_SIZE
 
-        # Game state
-        snake = [
-            {"x": 100, "y": 100},
-            {"x": 90, "y": 100},
-            {"x": 80, "y": 100},
-        ]
+# Game state
+snake = [
+    {"x": 100, "y": 100},
+    {"x": 90, "y": 100},
+    {"x": 80, "y": 100},
+]
+snake_direction = "RIGHT"
+food = {"x": 200, "y": 200}
+score = 0
+game_over = False
+
+# Handle keyboard input
+def handle_keydown(event):
+    global snake_direction
+    key = event.key
+    if key == "ArrowUp" and snake_direction != "DOWN":
+        snake_direction = "UP"
+    elif key == "ArrowDown" and snake_direction != "UP":
+        snake_direction = "DOWN"
+    elif key == "ArrowLeft" and snake_direction != "RIGHT":
+        snake_direction = "LEFT"
+    elif key == "ArrowRight" and snake_direction != "LEFT":
         snake_direction = "RIGHT"
-        food = {"x": 200, "y": 200}
-        score = 0
-        game_over = False
 
-        # Handle keyboard input
-        def handle_keydown(event):
-            global snake_direction
-            key = event.key
-            if key == "ArrowUp" and snake_direction != "DOWN":
-                snake_direction = "UP"
-            elif key == "ArrowDown" and snake_direction != "UP":
-                snake_direction = "DOWN"
-            elif key == "ArrowLeft" and snake_direction != "RIGHT":
-                snake_direction = "LEFT"
-            elif key == "ArrowRight" and snake_direction != "LEFT":
-                snake_direction = "RIGHT"
+# Wrap the function to avoid garbage collection issues
+handle_keydown_proxy = create_proxy(handle_keydown)
+window.addEventListener("keydown", handle_keydown_proxy)
 
-        # Wrap the function to avoid garbage collection issues
-        handle_keydown_proxy = create_proxy(handle_keydown)
-        window.addEventListener("keydown", handle_keydown_proxy)
+# Handle swipe gestures
+touch_start_x = None
+touch_start_y = None
 
-        # Handle swipe gestures
-        touch_start_x = None
-        touch_start_y = None
+def handle_touchstart(event):
+    global touch_start_x, touch_start_y
+    touch = event.touches[0]  # Get the first touch point
+    touch_start_x = touch.clientX
+    touch_start_y = touch.clientY
 
-        def handle_touchstart(event):
-            global touch_start_x, touch_start_y
-            touch = event.touches[0]  # Get the first touch point
-            touch_start_x = touch.clientX
-            touch_start_y = touch.clientY
-
-        def handle_touchend(event):
-            global touch_start_x, touch_start_y, snake_direction
-            if touch_start_x is None or touch_start_y is None:
-                return
-
-            touch = event.changedTouches[0]
-            dx = touch.clientX - touch_start_x
-            dy = touch.clientY - touch_start_y
-
-            # Determine swipe direction
-            if abs(dx) > abs(dy):  # Horizontal swipe
-                if dx > 0 and snake_direction != "LEFT":
-                    snake_direction = "RIGHT"
-                elif dx < 0 and snake_direction != "RIGHT":
-                    snake_direction = "LEFT"
-            else:  # Vertical swipe
-                if dy > 0 and snake_direction != "UP":
-                    snake_direction = "DOWN"
-                elif dy < 0 and snake_direction != "DOWN":
-                    snake_direction = "UP"
-
-            # Reset touch start positions
-            touch_start_x = None
-            touch_start_y = None
-
-        canvas.addEventListener("touchstart", create_proxy(handle_touchstart))
-        canvas.addEventListener("touchend", create_proxy(handle_touchend))
-
-        # Handle on-screen button clicks
-        def handle_button_click(event):
-            global snake_direction
-            button_id = event.target.id
-            if button_id == "up" and snake_direction != "DOWN":
-                snake_direction = "UP"
-            elif button_id == "down" and snake_direction != "UP":
-                snake_direction = "DOWN"
-            elif button_id == "left" and snake_direction != "RIGHT":
-                snake_direction = "LEFT"
-            elif button_id == "right" and snake_direction != "LEFT":
-                snake_direction = "RIGHT"
-
-        # Add event listeners for buttons
-        document.getElementById("up").addEventListener("click", create_proxy(handle_button_click))
-        document.getElementById("down").addEventListener("click", create_proxy(handle_button_click))
-        document.getElementById("left").addEventListener("click", create_proxy(handle_button_click))
-        document.getElementById("right").addEventListener("click", create_proxy(handle_button_click))
-
-        # Game functions
-        def generate_food():
-            while True:
-                new_food = {
-                    "x": random.randint(0, GRID_WIDTH - 1) * CELL_SIZE,
-                    "y": random.randint(0, GRID_HEIGHT - 1) * CELL_SIZE,
-                }
-                if not any(segment["x"] == new_food["x"] and segment["y"] == new_food["y"] for segment in snake):
-                    return new_food
-
-        def move_snake():
-            global score, game_over, food
-            head = snake[0].copy()
-
-            if snake_direction == "UP":
-                head["y"] -= CELL_SIZE
-            elif snake_direction == "DOWN":
-                head["y"] += CELL_SIZE
-            elif snake_direction == "LEFT":
-                head["x"] -= CELL_SIZE
-            elif snake_direction == "RIGHT":
-                head["x"] += CELL_SIZE
-
-            # Insert the new head
-            snake.insert(0, head)
-
-            # Check if snake eats the food
-            if head["x"] == food["x"] and head["y"] == food["y"]:
-                score += 1
-                score_element.innerText = f"Score: {score}"
-                food = generate_food()
-            else:
-                # Remove the tail
-                snake.pop()
-
-            # Check for collisions
-            if (
-                head["x"] < 0 or head["x"] >= SCREEN_WIDTH or
-                head["y"] < 0 or head["y"] >= SCREEN_HEIGHT or
-                any(segment["x"] == head["x"] and segment["y"] == head["y"] for segment in snake[1:])
-            ):
-                game_over = True
-                window.alert(f"Game Over! Your score: {score}")
-                reset_game()
-
-        def reset_game():
-            global snake, snake_direction, food, score, game_over
-            snake = [
-                {"x": 100, "y": 100},
-                {"x": 90, "y": 100},
-                {"x": 80, "y": 100},
-            ]
+def handle_touchend(event):
+    global touch_start_x, touch_start_y, snake_direction
+    if touch_start_x is None or touch_start_y is None:
+        return
+    touch = event.changedTouches[0]
+    dx = touch.clientX - touch_start_x
+    dy = touch.clientY - touch_start_y
+    
+    # Determine swipe direction
+    if abs(dx) > abs(dy):  # Horizontal swipe
+        if dx > 0 and snake_direction != "LEFT":
             snake_direction = "RIGHT"
-            food = generate_food()
-            score = 0
-            score_element.innerText = f"Score: {score}"
-            game_over = False
+        elif dx < 0 and snake_direction != "RIGHT":
+            snake_direction = "LEFT"
+    else:  # Vertical swipe
+        if dy > 0 and snake_direction != "UP":
+            snake_direction = "DOWN"
+        elif dy < 0 and snake_direction != "DOWN":
+            snake_direction = "UP"
+    
+    # Reset touch start positions
+    touch_start_x = None
+    touch_start_y = None
 
-        def draw():
-            # Clear the canvas
-            ctx.fillStyle = "#000000"
-            ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+canvas.addEventListener("touchstart", create_proxy(handle_touchstart))
+canvas.addEventListener("touchend", create_proxy(handle_touchend))
 
-            # Draw the snake
-            ctx.fillStyle = "#00FF00"
-            for segment in snake:
-                ctx.fillRect(segment["x"], segment["y"], CELL_SIZE, CELL_SIZE)
+# Handle on-screen button clicks
+def handle_button_click(event):
+    global snake_direction
+    button_id = event.target.id
+    if button_id == "up" and snake_direction != "DOWN":
+        snake_direction = "UP"
+    elif button_id == "down" and snake_direction != "UP":
+        snake_direction = "DOWN"
+    elif button_id == "left" and snake_direction != "RIGHT":
+        snake_direction = "LEFT"
+    elif button_id == "right" and snake_direction != "LEFT":
+        snake_direction = "RIGHT"
 
-            # Draw the food
-            ctx.fillStyle = "#FF0000"
-            ctx.fillRect(food["x"], food["y"], CELL_SIZE, CELL_SIZE)
+# Add event listeners for buttons
+document.getElementById("up").addEventListener("click", create_proxy(handle_button_click))
+document.getElementById("down").addEventListener("click", create_proxy(handle_button_click))
+document.getElementById("left").addEventListener("click", create_proxy(handle_button_click))
+document.getElementById("right").addEventListener("click", create_proxy(handle_button_click))
 
-        async def game_loop():
-            while True:
-                if not game_over:
-                    move_snake()
-                    draw()
-                await asyncio.sleep(0.2)
+# Game functions
+def generate_food():
+    while True:
+        new_food = {
+            "x": random.randint(0, GRID_WIDTH - 1) * CELL_SIZE,
+            "y": random.randint(0, GRID_HEIGHT - 1) * CELL_SIZE,
+        }
+        if not any(segment["x"] == new_food["x"] and segment["y"] == new_food["y"] for segment in snake):
+            return new_food
 
-        asyncio.create_task(game_loop())
-    </py-script>
-</body>
-</html>
+def move_snake():
+    global score, game_over, food, snake_direction
+    head = snake[0].copy()
+    
+    if snake_direction == "UP":
+        head["y"] -= CELL_SIZE
+    elif snake_direction == "DOWN":
+        head["y"] += CELL_SIZE
+    elif snake_direction == "LEFT":
+        head["x"] -= CELL_SIZE
+    elif snake_direction == "RIGHT":
+        head["x"] += CELL_SIZE
+    
+    # Insert the new head
+    snake.insert(0, head)
+    
+    # Check if snake eats the food
+    if head["x"] == food["x"] and head["y"] == food["y"]:
+        score += 1
+        score_element.innerText = f"Score: {score}"
+        food = generate_food()
+    else:
+        # Remove the tail
+        snake.pop()
+    
+    # Check for collisions
+    if (
+        head["x"] < 0 or head["x"] >= SCREEN_WIDTH or
+        head["y"] < 0 or head["y"] >= SCREEN_HEIGHT or
+        any(segment["x"] == head["x"] and segment["y"] == head["y"] for segment in snake[1:])
+    ):
+        game_over = True
+        window.alert(f"Game Over! Your score: {score}")
+        reset_game()
+
+def reset_game():
+    global snake, snake_direction, food, score, game_over
+    snake = [
+        {"x": 100, "y": 100},
+        {"x": 90, "y": 100},
+        {"x": 80, "y": 100},
+    ]
+    snake_direction = "RIGHT"
+    food = generate_food()
+    score = 0
+    score_element.innerText = f"Score: {score}"
+    game_over = False
+
+def draw():
+    # Clear the canvas
+    ctx.fillStyle = "#000000"
+    ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+    
+    # Draw the snake
+    ctx.fillStyle = "#00FF00"
+    for segment in snake:
+        ctx.fillRect(segment["x"], segment["y"], CELL_SIZE, CELL_SIZE)
+    
+    # Draw the food
+    ctx.fillStyle = "#FF0000"
+    ctx.fillRect(food["x"], food["y"], CELL_SIZE, CELL_SIZE)
+
+async def game_loop():
+    while True:
+        if not game_over:
+            move_snake()
+            draw()
+        await asyncio.sleep(0.2)
+
+# Start the game loop
+asyncio.create_task(game_loop())
+
 
 
