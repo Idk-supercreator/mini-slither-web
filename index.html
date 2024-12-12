@@ -28,7 +28,7 @@ game_over = False
 
 # Handle keyboard input
 def handle_keydown(event):
-    global snake_direction  # Ensure snake_direction is updated globally
+    global snake_direction
     key = event.key
     if key == "ArrowUp" and snake_direction != "DOWN":
         snake_direction = "UP"
@@ -60,6 +60,7 @@ def handle_touchend(event):
     touch = event.changedTouches[0]
     dx = touch.clientX - touch_start_x
     dy = touch.clientY - touch_start_y
+    
     # Determine swipe direction
     if abs(dx) > abs(dy):  # Horizontal swipe
         if dx > 0 and snake_direction != "LEFT":
@@ -71,6 +72,7 @@ def handle_touchend(event):
             snake_direction = "DOWN"
         elif dy < 0 and snake_direction != "DOWN":
             snake_direction = "UP"
+    
     # Reset touch start positions
     touch_start_x = None
     touch_start_y = None
@@ -80,7 +82,7 @@ canvas.addEventListener("touchend", create_proxy(handle_touchend))
 
 # Handle on-screen button clicks
 def handle_button_click(event):
-    global snake_direction  # Ensure snake_direction is updated globally
+    global snake_direction
     button_id = event.target.id
     if button_id == "up" and snake_direction != "DOWN":
         snake_direction = "UP"
@@ -108,10 +110,9 @@ def generate_food():
             return new_food
 
 def move_snake():
-    global score, game_over, food
+    global score, game_over, food, snake_direction
     head = snake[0].copy()
     
-    # Move the snake head in the current direction
     if snake_direction == "UP":
         head["y"] -= CELL_SIZE
     elif snake_direction == "DOWN":
@@ -123,7 +124,7 @@ def move_snake():
     
     # Insert the new head
     snake.insert(0, head)
-
+    
     # Check if snake eats the food
     if head["x"] == food["x"] and head["y"] == food["y"]:
         score += 1
@@ -132,14 +133,26 @@ def move_snake():
     else:
         # Remove the tail
         snake.pop()
-
+    
     # Check for collisions
-    if (head["x"] < 0 or head["x"] >= SCREEN_WIDTH or head["y"] < 0 or head["y"] >= SCREEN_HEIGHT or
-        any(segment["x"] == head["x"] and segment["y"] == head["y"] for segment in snake[1:])):
+    if (
+        head["x"] < 0 or head["x"] >= SCREEN_WIDTH or
+        head["y"] < 0 or head["y"] >= SCREEN_HEIGHT or
+        any(segment["x"] == head["x"] and segment["y"] == head["y"] for segment in snake[1:])
+    ):
         game_over = True
-        window.alert(f"Game Over! Your score: {score}")
-        reset_game()
+        display_game_over()
 
+# Display Game Over Overlay
+def display_game_over():
+    ctx.fillStyle = "rgba(0, 0, 0, 0.5)"
+    ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+    ctx.fillStyle = "#FFFFFF"
+    ctx.font = "30px Arial"
+    ctx.textAlign = "center"
+    ctx.fillText(f"Game Over! Your score: {score}", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
+
+# Reset Game
 def reset_game():
     global snake, snake_direction, food, score, game_over
     snake = [
@@ -157,12 +170,12 @@ def draw():
     # Clear the canvas
     ctx.fillStyle = "#000000"
     ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
-
+    
     # Draw the snake
     ctx.fillStyle = "#00FF00"
     for segment in snake:
         ctx.fillRect(segment["x"], segment["y"], CELL_SIZE, CELL_SIZE)
-
+    
     # Draw the food
     ctx.fillStyle = "#FF0000"
     ctx.fillRect(food["x"], food["y"], CELL_SIZE, CELL_SIZE)
@@ -174,11 +187,5 @@ async def game_loop():
             draw()
         await asyncio.sleep(0.2)
 
-async def start_game():
-    await game_loop()
-
-# Start the game once the script is fully loaded
-asyncio.create_task(start_game())
-
-
-
+# Start the game loop
+asyncio.create_task(game_loop())
